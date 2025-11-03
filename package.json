@@ -7,7 +7,6 @@
   },
   "dependencies": {
     "xml2js": "^0.6.2",
-    "@sparticuz/chromium": "^123.0.1",
-    "puppeteer-core": "^23.0.2"
+    "node-fetch": "^2.7.0"
   }
 }

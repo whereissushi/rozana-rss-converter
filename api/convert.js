@@ -1,9 +1,7 @@
 const xml2js = require('xml2js');
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
+const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
-  let browser;
   try {
     const feedUrl = req.query.url;
 
@@ -11,19 +9,20 @@ module.exports = async (req, res) => {
       return res.status(400).send('Missing url parameter');
     }
 
-    // Launch headless browser to bypass Cloudflare
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless
+    // Use a CORS proxy to bypass Cloudflare
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`;
+
+    const response = await fetch(proxyUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
     });
 
-    const page = await browser.newPage();
-    await page.goto(feedUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+    }
 
-    // Get the page content
-    const xmlData = await page.content();
+    const xmlData = await response.text();
 
     // Parse the XML
     const parser = new xml2js.Parser();
@@ -68,10 +67,6 @@ ${items}
   } catch (error) {
     console.error('Error converting feed:', error);
     res.status(500).send('Error converting feed: ' + error.message);
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 };
 
