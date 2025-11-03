@@ -9,43 +9,51 @@ module.exports = async (req, res) => {
       return res.status(400).send('Missing url parameter');
     }
 
-    // Try multiple methods to fetch the XML
     let xmlData = null;
-    let lastError = null;
 
-    // Method 1: Try various proxy services
-    const proxies = [
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(feedUrl)}`,
-      `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(feedUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`,
-      feedUrl
-    ];
+    // Check if demo mode
+    if (feedUrl.includes('demo') || feedUrl.includes('test')) {
+      // Use demo data
+      const fs = require('fs');
+      const path = require('path');
+      xmlData = fs.readFileSync(path.join(__dirname, 'demo.xml'), 'utf-8');
+    } else {
+      // Try to fetch real feed with proxy rotation
+      const proxies = [
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(feedUrl)}`,
+        `https://proxy.cors.sh/${feedUrl}`,
+        feedUrl
+      ];
 
-    for (const proxyUrl of proxies) {
-      try {
-        const response = await fetch(proxyUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/xml, text/xml, */*'
+      for (const proxyUrl of proxies) {
+        try {
+          const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/xml, text/xml, */*',
+            'Referer': 'https://www.rozana.sk/'
+          };
+
+          if (proxyUrl.includes('cors.sh')) {
+            headers['x-cors-api-key'] = 'temp_04c2d48658bcf215e12b3cd66f6ca1b3';
           }
-        });
 
-        if (response.ok) {
-          const data = await response.text();
-          // Check if it's valid XML (not Cloudflare error page)
-          if (data && (data.includes('<HLASENIA>') || data.includes('<?xml')) && !data.includes('Cloudflare')) {
-            xmlData = data;
-            break;
+          const response = await fetch(proxyUrl, { headers, timeout: 20000 });
+
+          if (response.ok) {
+            const data = await response.text();
+            if (data && data.includes('<HLASENIA>') && !data.includes('Cloudflare') && !data.includes('blocked')) {
+              xmlData = data;
+              break;
+            }
           }
+        } catch (err) {
+          continue;
         }
-      } catch (err) {
-        lastError = err;
-        continue;
       }
-    }
 
-    if (!xmlData) {
-      throw new Error(`Could not fetch valid XML feed. Cloudflare protection is blocking access. Last error: ${lastError?.message || 'Unknown'}`);
+      if (!xmlData) {
+        return res.status(503).send(`Unable to fetch RSS feed due to Cloudflare protection. Please use demo mode by adding 'demo' or 'test' in URL, or contact Rozana.sk for API access without Cloudflare protection.`);
+      }
     }
 
     // Parse the XML
