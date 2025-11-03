@@ -18,30 +18,44 @@ module.exports = async (req, res) => {
       const path = require('path');
       xmlData = fs.readFileSync(path.join(__dirname, 'demo.xml'), 'utf-8');
     } else {
-      // Try to fetch real feed with proxy rotation
-      const proxies = [
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(feedUrl)}`,
-        `https://proxy.cors.sh/${feedUrl}`,
-        feedUrl
+      // Try to fetch real feed with multiple methods
+      const methods = [
+        // Method 1: ScraperAPI (has free tier with render=true for JS)
+        {
+          url: `http://api.scraperapi.com?api_key=scraperapi_free_trial&url=${encodeURIComponent(feedUrl)}&render=false`,
+          headers: {}
+        },
+        // Method 2: Direct with full browser headers
+        {
+          url: feedUrl,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'sk-SK,sk;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'Referer': 'https://www.rozana.sk/'
+          }
+        }
       ];
 
-      for (const proxyUrl of proxies) {
+      for (const method of methods) {
         try {
-          const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/xml, text/xml, */*',
-            'Referer': 'https://www.rozana.sk/'
-          };
-
-          if (proxyUrl.includes('cors.sh')) {
-            headers['x-cors-api-key'] = 'temp_04c2d48658bcf215e12b3cd66f6ca1b3';
-          }
-
-          const response = await fetch(proxyUrl, { headers, timeout: 20000 });
+          const response = await fetch(method.url, {
+            headers: method.headers,
+            timeout: 25000
+          });
 
           if (response.ok) {
             const data = await response.text();
-            if (data && data.includes('<HLASENIA>') && !data.includes('Cloudflare') && !data.includes('blocked')) {
+            if (data && data.includes('<HLASENIA>') && !data.includes('Cloudflare') && !data.includes('blocked') && !data.toLowerCase().includes('attention required')) {
               xmlData = data;
               break;
             }
