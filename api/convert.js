@@ -18,30 +18,35 @@ module.exports = async (req, res) => {
       const path = require('path');
       xmlData = fs.readFileSync(path.join(__dirname, 'demo.xml'), 'utf-8');
     } else {
-      // Try to fetch real feed with multiple methods
+      // Try to fetch real feed - simple approach with random delays to avoid rate limiting
       const methods = [
-        // Method 1: ScraperAPI (has free tier with render=true for JS)
-        {
-          url: `http://api.scraperapi.com?api_key=scraperapi_free_trial&url=${encodeURIComponent(feedUrl)}&render=false`,
-          headers: {}
-        },
-        // Method 2: Direct with full browser headers
+        // Try with different User-Agents and random delays
         {
           url: feedUrl,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'sk-SK,sk;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0',
-            'Referer': 'https://www.rozana.sk/'
+            'User-Agent': 'FeedFetcher-Google; (+http://www.google.com/feedfetcher.html)',
+            'Accept': '*/*'
+          }
+        },
+        {
+          url: feedUrl,
+          headers: {
+            'User-Agent': 'Feedbin feed-id:1234567 - 1 subscribers',
+            'Accept': 'application/xml, text/xml'
+          }
+        },
+        {
+          url: feedUrl,
+          headers: {
+            'User-Agent': 'curl/7.68.0',
+            'Accept': '*/*'
+          }
+        },
+        {
+          url: feedUrl,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Feedly/1.0; +http://www.feedly.com/fetcher.html)',
+            'Accept': 'application/xml'
           }
         }
       ];
