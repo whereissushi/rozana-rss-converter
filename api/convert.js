@@ -1,7 +1,9 @@
-const axios = require('axios');
 const xml2js = require('xml2js');
+const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer-core');
 
 module.exports = async (req, res) => {
+  let browser;
   try {
     const feedUrl = req.query.url;
 
@@ -9,22 +11,19 @@ module.exports = async (req, res) => {
       return res.status(400).send('Missing url parameter');
     }
 
-    // Fetch the Rozana XML feed with browser-like headers
-    const response = await axios.get(feedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Cache-Control': 'max-age=0'
-      }
+    // Launch headless browser to bypass Cloudflare
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
     });
-    const xmlData = response.data;
+
+    const page = await browser.newPage();
+    await page.goto(feedUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+
+    // Get the page content
+    const xmlData = await page.content();
 
     // Parse the XML
     const parser = new xml2js.Parser();
@@ -69,6 +68,10 @@ ${items}
   } catch (error) {
     console.error('Error converting feed:', error);
     res.status(500).send('Error converting feed: ' + error.message);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 };
 
