@@ -9,20 +9,42 @@ module.exports = async (req, res) => {
       return res.status(400).send('Missing url parameter');
     }
 
-    // Use a CORS proxy to bypass Cloudflare
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`;
+    // Try multiple proxy services
+    const proxies = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`,
+      feedUrl // Direct attempt as fallback
+    ];
 
-    const response = await fetch(proxyUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    let xmlData = null;
+    let lastError = null;
+
+    for (const proxyUrl of proxies) {
+      try {
+        const response = await fetch(proxyUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/xml, text/xml, */*'
+          },
+          timeout: 15000
+        });
+
+        if (response.ok) {
+          xmlData = await response.text();
+          // Check if it's valid XML (not Cloudflare error page)
+          if (xmlData.includes('<HLASENIA>') || xmlData.includes('<?xml')) {
+            break;
+          }
+        }
+      } catch (err) {
+        lastError = err;
+        continue;
       }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
     }
 
-    const xmlData = await response.text();
+    if (!xmlData) {
+      throw new Error(`Could not fetch feed from any proxy. Last error: ${lastError?.message || 'Unknown error'}`);
+    }
 
     // Parse the XML
     const parser = new xml2js.Parser();
