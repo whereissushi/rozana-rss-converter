@@ -9,30 +9,32 @@ module.exports = async (req, res) => {
       return res.status(400).send('Missing url parameter');
     }
 
-    // Try multiple proxy services
-    const proxies = [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(feedUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`,
-      feedUrl // Direct attempt as fallback
-    ];
-
+    // Try multiple methods to fetch the XML
     let xmlData = null;
     let lastError = null;
+
+    // Method 1: Try various proxy services
+    const proxies = [
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(feedUrl)}`,
+      `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(feedUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(feedUrl)}`,
+      feedUrl
+    ];
 
     for (const proxyUrl of proxies) {
       try {
         const response = await fetch(proxyUrl, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/xml, text/xml, */*'
-          },
-          timeout: 15000
+          }
         });
 
         if (response.ok) {
-          xmlData = await response.text();
+          const data = await response.text();
           // Check if it's valid XML (not Cloudflare error page)
-          if (xmlData.includes('<HLASENIA>') || xmlData.includes('<?xml')) {
+          if (data && (data.includes('<HLASENIA>') || data.includes('<?xml')) && !data.includes('Cloudflare')) {
+            xmlData = data;
             break;
           }
         }
@@ -43,7 +45,7 @@ module.exports = async (req, res) => {
     }
 
     if (!xmlData) {
-      throw new Error(`Could not fetch feed from any proxy. Last error: ${lastError?.message || 'Unknown error'}`);
+      throw new Error(`Could not fetch valid XML feed. Cloudflare protection is blocking access. Last error: ${lastError?.message || 'Unknown'}`);
     }
 
     // Parse the XML
